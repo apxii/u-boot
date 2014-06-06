@@ -91,9 +91,11 @@ DECLARE_GLOBAL_DATA_PTR;
 
 static enum boot_device boot_dev;
 
-#define GPIO_VOL_DN_KEY IMX_GPIO_NR(1, 5)
+#define GPIO_VOL_DN_KEY IMX_GPIO_NR(4, 9)
 #define USB_OTG_PWR IMX_GPIO_NR(3, 22)
 #define USB_H1_POWER IMX_GPIO_NR(1, 29)
+#define BOARD_POWER_CTRL    IMX_GPIO_NR(6, 31)
+
 
 extern int sata_curr_device;
 
@@ -368,11 +370,20 @@ int dram_init(void)
 static void setup_uart(void)
 {
 #if defined CONFIG_MX6Q
+	//-------qingleqq mdf----------------
+#if 0   //qingleqq del
 	/* UART1 TXD */
 	mxc_iomux_v3_setup_pad(MX6Q_PAD_CSI0_DAT10__UART1_TXD);
-
 	/* UART1 RXD */
 	mxc_iomux_v3_setup_pad(MX6Q_PAD_CSI0_DAT11__UART1_RXD);
+#else
+	/* UART1 TXD */
+	mxc_iomux_v3_setup_pad(MX6Q_PAD_SD3_DAT7__UART1_TXD);
+	//  /* UART1 RXD */
+	mxc_iomux_v3_setup_pad(MX6Q_PAD_SD3_DAT6__UART1_RXD);
+#endif
+	//-------qingleqq mdf----------------
+
 #elif defined CONFIG_MX6DL
 	/* UART1 TXD */
 	mxc_iomux_v3_setup_pad(MX6DL_PAD_CSI0_DAT10__UART1_TXD);
@@ -966,10 +977,14 @@ iomux_v3_cfg_t usdhc3_pads[] = {
 	MX6Q_PAD_SD3_DAT1__USDHC3_DAT1,
 	MX6Q_PAD_SD3_DAT2__USDHC3_DAT2,
 	MX6Q_PAD_SD3_DAT3__USDHC3_DAT3,
+	//---------------qingleqq del----------
+#if 0
 	MX6Q_PAD_SD3_DAT4__USDHC3_DAT4,
 	MX6Q_PAD_SD3_DAT5__USDHC3_DAT5,
 	MX6Q_PAD_SD3_DAT6__USDHC3_DAT6,
 	MX6Q_PAD_SD3_DAT7__USDHC3_DAT7,
+#endif
+	//--------------qingleqq del------------
 };
 
 iomux_v3_cfg_t usdhc4_pads[] = {
@@ -1699,6 +1714,15 @@ void setup_splash_image(void)
 #endif
 #endif /* !CONFIG_MXC_EPDC */
 
+static void e9_board_poweron(int onoff)
+{
+	mxc_iomux_v3_setup_pad(MX6Q_PAD_EIM_BCLK__GPIO_6_31);
+	if (onoff != 0)
+		gpio_direction_output(BOARD_POWER_CTRL, 1);
+	else
+		gpio_direction_output(BOARD_POWER_CTRL, 0);
+}
+
 int board_init(void)
 {
 /* need set Power Supply Glitch to 0x41736166
@@ -1716,6 +1740,7 @@ int board_init(void)
 	setup_boot_device();
 	fsl_set_system_rev();
 
+	e9_board_poweron(1);
 	/* board id for linux */
 	gd->bd->bi_arch_number = MACH_TYPE_MX6Q_SABRESD;
 
@@ -1759,8 +1784,7 @@ int check_recovery_cmd_file(void)
 	recovery_mode = check_and_clean_recovery_flag();
 
 	/* Check Recovery Combo Button press or not. */
-	mxc_iomux_v3_setup_pad(MX6X_IOMUX(PAD_GPIO_5__GPIO_1_5));
-
+	mxc_iomux_v3_setup_pad(MX6X_IOMUX(PAD_KEY_ROW1__GPIO_4_9));
 	gpio_direction_input(GPIO_VOL_DN_KEY);
 
 	if (gpio_get_value(GPIO_VOL_DN_KEY) == 0) { /* VOL_DN key is low assert */
@@ -1828,7 +1852,7 @@ static int phy_write(char *devname, unsigned char addr, unsigned char reg,
 int mx6_rgmii_rework(char *devname, int phy_addr)
 {
 	unsigned short val;
-
+#if 0
 	/* To enable AR8031 ouput a 125MHz clk from CLK_25M */
 	phy_write(devname, phy_addr, 0xd, 0x7);
 	phy_write(devname, phy_addr, 0xe, 0x8016);
@@ -1844,7 +1868,11 @@ int mx6_rgmii_rework(char *devname, int phy_addr)
 	phy_read(devname, phy_addr, 0x1e, &val);
 	val |= 0x0100;
 	phy_write(devname, phy_addr, 0x1e, val);
-
+#elif 1
+	printf("%s fin to rework network!\n", __func__);
+	phy_write(devname, phy_addr, 0x00, 0x3340);
+	__udelay(10000);
+#endif
 	return 0;
 }
 
@@ -1984,6 +2012,7 @@ int checkboard(void)
 	}
 
 #ifdef CONFIG_SECURE_BOOT
+	if (check_hab_enable() == 1)
 	get_hab_status();
 #endif
 
